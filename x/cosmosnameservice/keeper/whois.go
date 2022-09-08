@@ -61,7 +61,7 @@ func (k Keeper) SetWhoisCount(ctx sdk.Context, count int64) {
 // GetWhois returns the whois information
 // 获取whois结构体数据, key就是域名的name
 func (k Keeper) GetWhois(ctx sdk.Context, key string) (types.Whois, error) {
-	// 1. 获取namservice数据库
+	// 1. 使用StoreKey访问存储,获取namservice数据库
 	store := ctx.KVStore(k.storeKey)
 	var whois types.Whois
 	// 2. 拼接key, whois前缀 + 获取参数key
@@ -76,13 +76,13 @@ func (k Keeper) GetWhois(ctx sdk.Context, key string) (types.Whois, error) {
 }
 
 // SetWhois sets a whois. We modified this function to use the `name` value as the key instead of msg.ID
-// 存储Whois, 我们修改了这个函数，使用' name '值作为键，而不是msg.ID
+// 存储Whois,我们修改这个函数,使用'name'值作为键,而不是msg.ID
 func (k Keeper) SetWhois(ctx sdk.Context, name string, whois types.Whois) {
 	store := ctx.KVStore(k.storeKey)
 	// 使用cdc编码参数whois结构体返回的bz是byte切片
-	// MustMarshalBinaryLengthPrefixed 有Must代表不返回其错误直接Panic处理， 即使有err的话，没有的话返回可能的错误
+	// MustMarshalBinaryLengthPrefixed 有Must代表不返回其错误直接Panic处理,即使有err的话，没有的话返回可能的错误
 	bz := k.cdc.MustMarshalBinaryLengthPrefixed(whois)
-	// 使用' name '值作为键，而不是msg.ID
+	// 使用'name'值作为键,而不是msg.ID
 	key := []byte(types.WhoisPrefix + name)
 	// 存储
 	store.Set(key, bz)
@@ -132,7 +132,7 @@ func getWhois(ctx sdk.Context, path []string, k Keeper) (res []byte, sdkError er
 		return nil, err
 	}
 
-	// 编码/序列化为字节数组,
+	// 编码/序列化为字节数组
 	res, err = codec.MarshalJSONIndent(k.cdc, whois)
 	if err != nil {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrJSONMarshal, err.Error())

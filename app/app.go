@@ -55,7 +55,8 @@ var (
 	}
 )
 
-// 创建codec
+// 生成一个animo： *codec.Codec
+// 正确地注册你应用程序中使用的所有模块
 func MakeCodec() *codec.Codec {
 	var cdc = codec.New()
 
@@ -97,12 +98,13 @@ func NewInitApp(
 	logger log.Logger, db dbm.DB, traceStore io.Writer, loadLatest bool,
 	invCheckPeriod uint, baseAppOptions ...func(*bam.BaseApp),
 ) *NewApp {
+	// 首先定义将被不同模块共享的编解码器
 	cdc := MakeCodec()
-
+	// BaseApp通过ABCI协议处理与Tendermint的交互
 	bApp := bam.NewBaseApp(appName, logger, db, auth.DefaultTxDecoder(cdc), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetAppVersion(version.Version)
-
+	// 所需要存储的键值
 	keys := sdk.NewKVStoreKeys(
 		bam.MainStoreKey,
 		auth.StoreKey,
@@ -114,7 +116,7 @@ func NewInitApp(
 	)
 
 	tKeys := sdk.NewTransientStoreKeys(staking.TStoreKey, params.TStoreKey)
-
+	// 初始化一个APP
 	var app = &NewApp{
 		BaseApp:        bApp,
 		cdc:            cdc,
@@ -124,18 +126,20 @@ func NewInitApp(
 		subspaces:      make(map[string]params.Subspace),
 	}
 
+	// paramsKeeper 处理应用程序的参数存储
 	app.paramsKeeper = params.NewKeeper(app.cdc, keys[params.StoreKey], tKeys[params.TStoreKey])
 	app.subspaces[auth.ModuleName] = app.paramsKeeper.Subspace(auth.DefaultParamspace)
 	app.subspaces[bank.ModuleName] = app.paramsKeeper.Subspace(bank.DefaultParamspace)
 	app.subspaces[staking.ModuleName] = app.paramsKeeper.Subspace(staking.DefaultParamspace)
 
+	// AccountKeeper 处理address -> account对应关系
 	app.accountKeeper = auth.NewAccountKeeper(
 		app.cdc,
 		keys[auth.StoreKey],
 		app.subspaces[auth.ModuleName],
 		auth.ProtoBaseAccount,
 	)
-
+	// bankKeeper允许你与sdk.Coins交互
 	app.bankKeeper = bank.NewBaseKeeper(
 		app.accountKeeper,
 		app.subspaces[bank.ModuleName],
@@ -156,11 +160,11 @@ func NewInitApp(
 		app.supplyKeeper,
 		app.subspaces[staking.ModuleName],
 	)
-
+	// 处理Atom
 	app.stakingKeeper = *stakingKeeper.SetHooks(
 		staking.NewMultiStakingHooks(),
 	)
-
+	// 与我们自定义的域名服务模块交互
 	app.nameserviceKeeper = cosmosnameservicekeeper.NewKeeper(
 		app.bankKeeper,
 		app.cdc,
@@ -190,13 +194,14 @@ func NewInitApp(
 		genutil.ModuleName,
 		// this line is used by starport scaffolding # 7
 	)
-
+	// 注册路由的句柄
+	// 注册域名服务路由和查询路由
 	app.mm.RegisterRoutes(app.Router(), app.QueryRouter())
-
+	// 初始化相关参数
 	app.SetInitChainer(app.InitChainer)
 	app.SetBeginBlocker(app.BeginBlocker)
 	app.SetEndBlocker(app.EndBlocker)
-
+	// AnteHandler 处理签名验证和交易预处理
 	app.SetAnteHandler(
 		auth.NewAnteHandler(
 			app.accountKeeper,
@@ -204,7 +209,7 @@ func NewInitApp(
 			auth.DefaultSigVerificationGasConsumer,
 		),
 	)
-
+	// 从KV数据库加载相关数据
 	app.MountKVStores(keys)
 	app.MountTransientStores(tKeys)
 
@@ -228,7 +233,7 @@ func (app *NewApp) InitChainer(ctx sdk.Context, req abci.RequestInitChain) abci.
 	var genesisState simapp.GenesisState
 
 	app.cdc.MustUnmarshalJSON(req.AppStateBytes, &genesisState)
-
+	// load the initial stake information
 	return app.mm.InitGenesis(ctx, genesisState)
 }
 
